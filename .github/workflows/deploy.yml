@@ -1,0 +1,16 @@
+# Illustrative deploy for #174: nothing is deployed anywhere.
+name: deploy
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [production, production-people]
+        default: production
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - run: echo "would deploy $GITHUB_SHA to ${{ inputs.environment }}, triggered by $GITHUB_TRIGGERING_ACTOR"

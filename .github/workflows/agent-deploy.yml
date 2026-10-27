@@ -1,0 +1,18 @@
+# Stand-in agent credential (GITHUB_TOKEN, github-actions[bot]) dispatches a deploy.
+name: agent-deploy
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [production, production-people]
+        default: production
+permissions:
+  actions: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh workflow run deploy.yml -R ${{ github.repository }} --ref main -f environment=${{ inputs.environment }}
+        env:
+          GH_TOKEN: ${{ github.token }}

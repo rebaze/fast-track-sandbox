@@ -1,6 +1,8 @@
 # Everything is owned by a person, except the fast-track class paths.
 *                 @tonit
+/src/
 /docs/
 /README.md
 /.github/         @tonit
 /.cleartoship/    @tonit
+/src/

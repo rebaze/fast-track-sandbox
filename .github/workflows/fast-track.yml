@@ -20,6 +20,9 @@ jobs:
       contents: write
       pull-requests: write
       checks: write
+    outputs:
+      verdict: ${{ steps.v.outputs.verdict }}
+      head: ${{ steps.v.outputs.head }}
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
@@ -27,6 +30,7 @@ jobs:
       MODE: ${{ vars.FT_MODE || 'check' }}
     steps:
       - name: Verdict
+        id: v
         run: |
           set -euo pipefail; set -f
           pr=$(gh api "repos/$REPO/pulls/$PR")
@@ -59,6 +63,7 @@ jobs:
             --arg run "$GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID" --arg files "$files" \
             '{pr:$pr,head:$head,author:$author,rules_blob:$rules,files:($files|split("\n")),verdict:$verdict,class:$class,reason:$reason,mode:$mode,run:$run}')
           echo "$receipt" | tee receipt.json
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"; echo "head=$head" >> "$GITHUB_OUTPUT"
           if [ $verdict = match ]; then concl=success; title="Fast track: $class"; else concl=neutral; title="Needs a person's review: $reason"; fi
           gh api "repos/$REPO/check-runs" -f name="Fast track" -f head_sha="$head" -f status=completed \
             -f conclusion=$concl -f "output[title]=$title" -f "output[summary]=$(printf '```json\n%s\n```' "$receipt")" >/dev/null
@@ -73,3 +78,29 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with: { name: receipt, path: receipt.json }
+
+  # No-App variant: the merge is a fast-forward push with a deploy key that is a
+  # bypass actor of the review ruleset. The key lives in the environment
+  # fast-track-gate, which only the default branch may use, so a pull request's
+  # own workflows cannot read it.
+  merge:
+    needs: verdict
+    if: needs.verdict.outputs.verdict == 'match' && vars.FT_MODE == 'deploykey'
+    runs-on: ubuntu-latest
+    environment: fast-track-gate
+    permissions: {}
+    env:
+      REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ needs.verdict.outputs.head }}
+      PR: ${{ github.event.pull_request.number || inputs.pr }}
+      KEY: ${{ secrets.FAST_TRACK_DEPLOY_KEY }}
+    steps:
+      - name: Fast-forward main to the judged commit
+        run: |
+          set -euo pipefail
+          umask 077; printf '%s\n' "$KEY" > "$RUNNER_TEMP/k"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/k -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git init -q r && cd r
+          git fetch -q "git@github.com:$REPO.git" "refs/pull/$PR/head"
+          [ "$(git rev-parse FETCH_HEAD)" = "$HEAD_SHA" ] || { echo "head moved since the verdict"; exit 1; }
+          git push "git@github.com:$REPO.git" "$HEAD_SHA:refs/heads/main"

@@ -28,7 +28,7 @@ jobs:
     steps:
       - name: Verdict
         run: |
-          set -euo pipefail
+          set -euo pipefail; set -f
           pr=$(gh api "repos/$REPO/pulls/$PR")
           head=$(jq -r .head.sha <<<"$pr"); base=$(jq -r .base.ref <<<"$pr")
           author=$(jq -r .user.login <<<"$pr")

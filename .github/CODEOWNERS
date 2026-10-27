@@ -1,6 +1,8 @@
-# Everything is owned by a person, except the fast-track class paths.
-*                 @tonit
+# Everything is owned by a team, except the fast-track class paths.
+# (The team stands in for "other people": an author who is the sole user
+# code owner needs no review at all, see T5b.)
+*                 @rebaze/developers
 /docs/
 /README.md
-/.github/         @tonit
-/.cleartoship/    @tonit
+/.github/         @rebaze/developers
+/.cleartoship/    @rebaze/developers

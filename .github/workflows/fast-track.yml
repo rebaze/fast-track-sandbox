@@ -1,0 +1,75 @@
+# The verdict. Runs only the default branch's copy of this file and never
+# checks out or executes the pull request's code: the PR is data.
+name: fast-track
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: pull request number
+        required: true
+permissions: {}
+concurrency:
+  group: fast-track-${{ github.event.pull_request.number || inputs.pr }}
+jobs:
+  verdict:
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request_target' && github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number || inputs.pr }}
+      MODE: ${{ vars.FT_MODE || 'check' }}
+    steps:
+      - name: Verdict
+        run: |
+          set -euo pipefail
+          pr=$(gh api "repos/$REPO/pulls/$PR")
+          head=$(jq -r .head.sha <<<"$pr"); base=$(jq -r .base.ref <<<"$pr")
+          author=$(jq -r .user.login <<<"$pr")
+          [ "$base" = main ] || { echo "base is not main"; exit 1; }
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" -q '.[].filename')
+          rules_meta=$(gh api "repos/$REPO/contents/.cleartoship/fast-track.yaml?ref=main")
+          rules_sha=$(jq -r .sha <<<"$rules_meta")
+          jq -r .content <<<"$rules_meta" | base64 -d > rules.yaml
+          verdict=no-match; class=""; reason=""
+          never=$(yq -r '.never[]' rules.yaml)
+          for f in $files; do for p in $never; do
+            if [[ "$f" == $p ]]; then reason="touches $f (never in a class)"; fi
+          done; done
+          if [ -z "$reason" ]; then
+            n=$(yq '.classes | length' rules.yaml)
+            for i in $(seq 0 $((n-1))); do
+              name=$(yq -r ".classes[$i].name" rules.yaml)
+              yq -r ".classes[$i].agents[]" rules.yaml | grep -qxF "$author" || { reason="$author is not an agent of $name"; continue; }
+              ok=1; for f in $files; do m=0
+                for p in $(yq -r ".classes[$i].paths[]" rules.yaml); do [[ "$f" == $p ]] && m=1; done
+                [ $m = 1 ] || { ok=0; reason="$f is outside $name"; }
+              done
+              if [ $ok = 1 ]; then verdict=match; class=$name; reason=""; break; fi
+            done
+          fi
+          receipt=$(jq -n --arg pr "$PR" --arg head "$head" --arg author "$author" --arg rules "$rules_sha" \
+            --arg verdict "$verdict" --arg class "$class" --arg reason "$reason" --arg mode "$MODE" \
+            --arg run "$GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID" --arg files "$files" \
+            '{pr:$pr,head:$head,author:$author,rules_blob:$rules,files:($files|split("\n")),verdict:$verdict,class:$class,reason:$reason,mode:$mode,run:$run}')
+          echo "$receipt" | tee receipt.json
+          if [ $verdict = match ]; then concl=success; title="Fast track: $class"; else concl=neutral; title="Needs a person's review: $reason"; fi
+          gh api "repos/$REPO/check-runs" -f name="Fast track" -f head_sha="$head" -f status=completed \
+            -f conclusion=$concl -f "output[title]=$title" -f "output[summary]=$(printf '```json\n%s\n```' "$receipt")" >/dev/null
+          if [ $verdict = match ] && [ "$MODE" = approve ]; then
+            gh api "repos/$REPO/pulls/$PR/reviews" -f event=APPROVE -f commit_id="$head" \
+              -f body="Fast track: class $class, rules blob $rules_sha. Receipt: $GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID" >/dev/null
+          fi
+          if [ $verdict = match ] && { [ "$MODE" = approve ] || [ "$MODE" = bypass ]; }; then
+            sleep 5
+            gh api -X PUT "repos/$REPO/pulls/$PR/merge" -f sha="$head" -f merge_method=squash \
+              -f commit_title="$(jq -r .title <<<"$pr") (#$PR, fast track: $class)" || echo "merge refused"
+          fi
+      - uses: actions/upload-artifact@v4
+        with: { name: receipt, path: receipt.json }

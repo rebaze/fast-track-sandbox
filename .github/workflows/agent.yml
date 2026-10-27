@@ -1,0 +1,40 @@
+# Stand-in agent: github-actions[bot] (the GITHUB_TOKEN, an App without the
+# workflows permission) opens a pull request. Until the agent App exists.
+name: agent
+on:
+  workflow_dispatch:
+    inputs:
+      branch: { required: true }
+      file: { required: true }
+      content: { required: true }
+      title: { required: true }
+      automerge: { type: boolean, default: false }
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Commit and open the pull request
+        env:
+          BRANCH: ${{ inputs.branch }}
+          FILE: ${{ inputs.file }}
+          CONTENT: ${{ inputs.content }}
+          TITLE: ${{ inputs.title }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          mkdir -p "$(dirname "$FILE")"; printf '%s\n' "$CONTENT" >> "$FILE"
+          git add -A; git commit -m "$TITLE"
+          git push origin "$BRANCH"
+          url=$(gh pr create --base main --head "$BRANCH" --title "$TITLE" --body "Opened by the stand-in agent (github-actions[bot]) for #174.")
+          echo "$url"; n=${url##*/}
+          gh workflow run fast-track.yml --ref main -f pr="$n"
+          if [ "${{ inputs.automerge }}" = true ]; then sleep 2; gh pr merge "$n" --auto --squash || true; fi

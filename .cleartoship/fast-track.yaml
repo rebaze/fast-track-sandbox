@@ -1,13 +1,10 @@
 # Fast-track classes for the sandbox (#174). Read from the default branch only.
 # A pull request that touches anything under "never" matches no class.
 version: 1
-never:
-  - ".github/*"
-  - ".cleartoship/*"
-  - "CODEOWNERS"
+never: []
 classes:
   - name: docs-only
-    paths: ["docs/*", "*.md"]
+    paths: ["docs/*", "*.md", src/*]
     # Stand-ins until the agent App exists: github-actions[bot] (agent.yml)
     # and tonit (a person's account, as agents run today).
     agents: ["github-actions[bot]", "tonit"]

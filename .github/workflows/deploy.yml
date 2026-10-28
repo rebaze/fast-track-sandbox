@@ -13,4 +13,4 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
-      - run: echo "would deploy $GITHUB_SHA to ${{ inputs.environment }}, triggered by $GITHUB_TRIGGERING_ACTOR"
+      - run: echo "would deploy, as edited by the agent, $GITHUB_SHA to ${{ inputs.environment }}, triggered by $GITHUB_TRIGGERING_ACTOR"

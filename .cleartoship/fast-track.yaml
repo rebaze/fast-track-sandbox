@@ -1,13 +1,10 @@
-# Fast-track classes for the sandbox (#174). Read from the default branch only.
-# A pull request that touches anything under "never" matches no class.
+# Fast-track classes for the sandbox (#174 in rebaze/cleartoship). Only the
+# version a human signed on Clear to Ship counts, and a change to this file
+# never takes the fast track.
 version: 1
-never:
-  - ".github/*"
-  - ".cleartoship/*"
-  - "CODEOWNERS"
 classes:
-  - name: docs-only
-    paths: ["docs/*", "*.md"]
-    # Stand-ins until the agent App exists: github-actions[bot] (agent.yml)
-    # and tonit (a person's account, as agents run today).
-    agents: ["github-actions[bot]", "tonit"]
+  - name: docs
+    title: Documentation only
+    paths: ["**/*.md"]
+    shape: docs-only
+    agents: ["rebaze-lab-agent[bot]"]
